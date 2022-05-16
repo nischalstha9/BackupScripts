@@ -6,7 +6,7 @@ while getopts ":p:" opt; do
   case $opt in
     p) project_path="$OPTARG"
     ;;
-    \?) echo "Invalid option -$OPTARG" >&2
+    \?) echo "Invalid path -$OPTARG" >&2
     exit 1
     ;;
   esac
@@ -45,14 +45,13 @@ fi
 
 # project_path="/home/nischal/dev/OnlineDonationPlatform"
 
-
-
-
+timestamp=$(date +%Y-%m-%d-%H-%M)
 working_dir=`pwd`
 cd $project_path
 project_name=${PWD##*/}
 cd $working_dir
-backup_dir=$working_dir/$project_name"_BACKUP_$(date +%Y-%m-%d)"
+backup_folder_name=$project_name"-BACKUP-"$timestamp
+backup_dir=$working_dir/$backup_folder_name
 mkdir -p $backup_dir
 
 
@@ -88,7 +87,7 @@ function set_env() {
 
 function do_db_backup(){
   mkdir -p $backup_dir/Database
-  dbname="`echo $project_name`_$(date +%Y-%m-%d).tar"
+  dbname=$project_name"-"$timestamp".tar"
   backup_file_name=$backup_dir/Database/$dbname
   pg_dump --format=t --blobs --verbose --no-privileges --no-owner --password --username $DATABASE_USER --dbname $DATABASE_NAME --host $DATABASE_HOST --port $DATABASE_PORT --file $backup_file_name
 }
@@ -99,7 +98,15 @@ backup_dockerfiles
 do_db_backup
 backup_mediafiles
 
-echo "BACKUP SUCCESSFULL!"
-echo "Find your backup at `pwd`"
+backup_tar_name=$backup_folder_name".tgz"
 
+tar -zcvpf $backup_tar_name $backup_folder_name
+rm -r $backup_folder_name
+
+echo "========================================="
+echo "==                                     =="
+echo "==         BACKUP SUCCESSFULL!         =="
+echo "==                                     =="
+echo "========================================="
+echo "Find your backup at `pwd`"
 exit 1
