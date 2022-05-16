@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
-#===========================================================================
+#====================================READ USER ARGS=======================================
 
 while getopts ":p:" opt; do
   case $opt in
@@ -20,8 +20,19 @@ done
 
 # -p = PATH = $project_path
 
-#===========================================================================
+#====================================READ USER ARGS=======================================
 
+
+if [ ! -d "$project_path" ]; then
+  while true;
+    do
+    echo "Please provide valid project path:"
+    read project_path
+    if [ -d "$project_path" ]; then
+      break
+    fi
+  done
+fi
 
 if [ ! -d "$project_path" ];
 then
@@ -50,7 +61,7 @@ function backup_env() {
   mkdir -p $env_backup
 
   cd $project_path
-  find . -maxdepth 1 -type f -iname "*env*" -exec cp '{}' "$env_backup/{}" ';'  
+  find . -maxdepth 1 -type f -iname "*env*" -exec cp -rf '{}' "$env_backup/{}" ';'  
   cd $working_dir
 }
 
@@ -59,7 +70,7 @@ function backup_dockerfiles() {
   mkdir -p $backup_dir/DockerSettings
   cur_dir=`pwd`
   cd $project_path
-  find . -maxdepth 1 -type f -iname "*docker*" -exec cp '{}' "`echo $backup_dir`/DockerSettings/{}" ';'  
+  find . -maxdepth 1 -type f -iname "*docker*" -exec cp -rf '{}' "`echo $backup_dir`/DockerSettings/{}" ';'  
   cd $cur_dir
 }
 
@@ -67,7 +78,7 @@ function backup_mediafiles() {
   mkdir -p $backup_dir/MediaFiles
   cur_dir=`pwd`
   cd $project_path
-  find . -maxdepth 1 -type d -iname "media" -exec cp -r '{}' "`echo $backup_dir`/MediaFiles/{}" ';'  
+  find . -maxdepth 1 -type d -iname "media" -exec cp -rf '{}' "`echo $backup_dir`/MediaFiles/{}" ';'  
   cd $cur_dir
 }
 
@@ -77,10 +88,8 @@ function set_env() {
 
 function do_db_backup(){
   mkdir -p $backup_dir/Database
-  echo "Database Password is: "$DATABASE_PASSWORD
   dbname="`echo $project_name`_$(date +%Y-%m-%d).tar"
   backup_file_name=$backup_dir/Database/$dbname
-  echo $backup_file_name
   pg_dump --format=t --blobs --verbose --no-privileges --no-owner --password --username $DATABASE_USER --dbname $DATABASE_NAME --host $DATABASE_HOST --port $DATABASE_PORT --file $backup_file_name
 }
 
@@ -89,5 +98,8 @@ backup_env
 backup_dockerfiles
 do_db_backup
 backup_mediafiles
+
+echo "BACKUP SUCCESSFULL!"
+echo "Find your backup at `pwd`"
 
 exit 1
