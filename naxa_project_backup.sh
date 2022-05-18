@@ -1,5 +1,6 @@
 #!/bin/bash
 set -e
+sudo pwd
 #====================================READ USER ARGS=======================================
 
 while getopts ":p:" opt; do
@@ -82,14 +83,21 @@ function backup_mediafiles() {
 }
 
 function set_env() {
-  export $(grep -v '^#' $project_path/.env | xargs)
+  export $(grep -v '^#' $project_path/env.txt | xargs)
 }
+
 
 function do_db_backup(){
   mkdir -p $backup_dir/Database
   dbname=$project_name"-"$timestamp".tar"
-  backup_file_name=$backup_dir/Database/$dbname
-  pg_dump --format=t --blobs --verbose --no-privileges --no-owner --password --username $DATABASE_USER --dbname $DATABASE_NAME --host $DATABASE_HOST --port $DATABASE_PORT --file $backup_file_name
+  db_backup_file_name=$dbname
+  cd $project_path
+  # db_container_name=$(echo $(docker inspect -f '{{.Name}}' $(docker-compose ps -q db) | cut -c2-))
+  db_container_name=`docker-compose ps | grep 5432 | awk {'print $1'}`
+  docker exec -t $db_container_name mkdir -p /var/lib/postgresql/data/db-backups
+  docker exec -t $db_container_name pg_dump --format=t --blobs --verbose --no-privileges --no-owner --dbname $POSTGRES_DB --user $POSTGRES_USER --file /var/lib/postgresql/data/db-backups/$dbname
+  sudo cp ./postgres_data/db-backups/$dbname $backup_dir/Database/
+  cd $working_dir
 }
 
 set_env
@@ -97,11 +105,11 @@ backup_env
 backup_dockerfiles
 do_db_backup
 backup_mediafiles
-
-backup_tar_name=$backup_folder_name".tgz"
-
-tar -zcvpf $backup_tar_name $backup_folder_name
-rm -r $backup_folder_name
+backup_tar_name=$backup_folder_name".tar.gz"
+sudo chmod 744 ./$backup_folder_name
+sudo chmod -R 744 ./$backup_folder_name/*
+GZIP=-9 tar -zcvpf $backup_tar_name $backup_folder_name
+sudo rm -r $backup_folder_name
 
 echo "========================================="
 echo "==                                     =="
