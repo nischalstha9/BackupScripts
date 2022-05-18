@@ -1,35 +1,28 @@
 #!/bin/bash
 set -e
 sudo pwd
+
 #====================================READ USER ARGS=======================================
-
-while getopts ":p:" opt; do
-  case $opt in
-    p) project_path="$OPTARG"
-    ;;
-    \?) echo "Invalid path -$OPTARG" >&2
-    exit 1
-    ;;
-  esac
-
-  case $OPTARG in
-    -*) echo "Option $opt needs a valid argument"
-    exit 1
-    ;;
+while getopts p:e: flag
+do 
+  case "${flag}" in
+    p) project_path=$OPTARG;;
+    e) env_file_name=$OPTARG;;
   esac
 done
 
 # -p = PATH = $project_path
-
+# -e = PATH = $env_file_name
 #====================================READ USER ARGS=======================================
 
+project_path=`echo "$project_path" | sed 's:/*$::'`
 
 if [ ! -d "$project_path" ]; then
   while true;
     do
     echo "Please provide valid project path:"
     read project_path
-    if [ -d "$project_path" ]; then
+    if [ sudo -d "$project_path" ]; then
       break
     fi
   done
@@ -40,6 +33,12 @@ then
     echo "No project path provided"
     echo "Please provide valid project path in -p parameter"
     echo "./backup.sh -p /projects/MyDemoProject"
+    exit 1
+fi
+
+if [ ! -f "$project_path/$env_file_name" ]; then
+    echo "Environment file not found!";
+    echo "Make sure to give valid environment file name in -e parameter";
     exit 1
 fi
 
@@ -61,7 +60,7 @@ function backup_env() {
   mkdir -p $env_backup
 
   cd $project_path
-  find . -maxdepth 1 -type f -iname "*env*" -exec cp -rf '{}' "$env_backup/{}" ';'  
+  sudo find . -maxdepth 1 -type f -iname "*env*" -exec cp -rf '{}' "$env_backup/{}" ';'  
   cd $working_dir
 }
 
@@ -70,7 +69,7 @@ function backup_dockerfiles() {
   mkdir -p $backup_dir/DockerSettings
   cur_dir=`pwd`
   cd $project_path
-  find . -maxdepth 1 -type f -iname "*docker*" -exec cp -rf '{}' "`echo $backup_dir`/DockerSettings/{}" ';'  
+  sudo find . -maxdepth 1 -type f -iname "*docker*" -exec cp -rf '{}' "`echo $backup_dir`/DockerSettings/{}" ';'  
   cd $cur_dir
 }
 
@@ -78,12 +77,17 @@ function backup_mediafiles() {
   mkdir -p $backup_dir/MediaFiles
   cur_dir=`pwd`
   cd $project_path
-  find . -maxdepth 1 -type d -iname "media" -exec cp -rf '{}' "`echo $backup_dir`/MediaFiles/{}" ';'  
+  sudo find . -maxdepth 1 -type d -iname "media" -exec cp -rf '{}' "`echo $backup_dir`/MediaFiles/{}" ';'  
   cd $cur_dir
 }
 
 function set_env() {
-  export $(grep -v '^#' $project_path/env.txt | xargs)
+  {
+    export $(grep -v '^#' $project_path/$env_file_name | xargs)
+  } || {
+    echo "Environment Setup Failed!";
+    exit 1;
+  }
 }
 
 
@@ -91,13 +95,26 @@ function do_db_backup(){
   mkdir -p $backup_dir/Database
   dbname=$project_name"-"$timestamp".tar"
   db_backup_file_name=$dbname
-  cd $project_path
-  # db_container_name=$(echo $(docker inspect -f '{{.Name}}' $(docker-compose ps -q db) | cut -c2-))
-  db_container_name=`docker-compose ps | grep 5432 | awk {'print $1'}`
-  docker exec -t $db_container_name mkdir -p /var/lib/postgresql/data/db-backups
-  docker exec -t $db_container_name pg_dump --format=t --blobs --verbose --no-privileges --no-owner --dbname $POSTGRES_DB --user $POSTGRES_USER --file /var/lib/postgresql/data/db-backups/$dbname
-  sudo cp ./postgres_data/db-backups/$dbname $backup_dir/Database/
-  cd $working_dir
+  DATABASE_NAME=$DATABASE_NAME$POSTGRES_DB
+  DATABASE_USER=$DATABASE_USER$POSTGRES_USER
+  {
+    cd $project_path
+    # db_container_name=$(echo $(docker inspect -f '{{.Name}}' $(docker-compose ps -q db) | cut -c2-))
+    
+    db_container_name=`docker-compose ps | grep 5432 | awk {'print $1'}`
+    # db_container_name=psql_naxa
+
+    docker exec -t $db_container_name mkdir -p /var/lib/postgresql/data/db-backups
+    docker exec -t $db_container_name pg_dump --format=t --blobs --no-privileges --no-owner --dbname $DATABASE_NAME --user $DATABASE_USER --file /var/lib/postgresql/data/db-backups/$dbname
+
+    sudo cp $project_path/postgres_data/db-backups/$dbname $backup_dir/Database/
+    sudo rm -r $project_path/postgres_data/db-backups
+    cd $working_dir
+  } || {
+      echo "DB BACKUP FAILED!!"
+    # pg_dump --format=t --blobs --verbose --no-privileges --no-owner --dbname $POSTGRES_DB --user $POSTGRES_USER --file /var/lib/postgresql/data/db-backups/$dbname
+    # sudo cp ./postgres_data/db-backups/$dbname $backup_dir/Database/
+  }
 }
 
 set_env
@@ -108,8 +125,11 @@ backup_mediafiles
 backup_tar_name=$backup_folder_name".tar.gz"
 sudo chmod 744 ./$backup_folder_name
 sudo chmod -R 744 ./$backup_folder_name/*
-GZIP=-9 tar -zcvpf $backup_tar_name $backup_folder_name
-sudo rm -r $backup_folder_name
+# GZIP=-9 tar -zcvpf $backup_tar_name $backup_folder_name
+# sudo rm -r $backup_folder_name
+
+log_text=$timestamp\t$project_name\t"SUCCESS"
+echo $log_text >> $working_dir/backup_log.txt
 
 echo "========================================="
 echo "==                                     =="
@@ -117,4 +137,5 @@ echo "==         BACKUP SUCCESSFULL!         =="
 echo "==                                     =="
 echo "========================================="
 echo "Find your backup at `pwd`"
-exit 1
+
+exit 0
