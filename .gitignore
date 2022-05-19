@@ -2,3 +2,7 @@
 !.gitignore
 !*backup*
 !readme.md
+!project_backup.sh
+!naxa_project_backup.sh
+!jenkins_backup.sh
+!homeS_projects_backup.sh

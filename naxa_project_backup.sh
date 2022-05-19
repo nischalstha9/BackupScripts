@@ -134,7 +134,7 @@ s3path="s3://naxa-developers/Project-backups/$project_name/$backup_tar_name"
 sudo tar cpz $backup_folder_name | gzip | aws s3 cp - $s3path
 sudo rm -r $backup_folder_name
 
-log_text=$timestamp\t$project_name\t"SUCCESS"
+log_text="$timestamp $project_name SUCCESS"
 echo $log_text >>$working_dir/backup_log.txt
 
 echo "========================================="
