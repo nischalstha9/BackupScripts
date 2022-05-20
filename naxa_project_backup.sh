@@ -137,8 +137,10 @@ backup_dockerfiles
 do_db_backup
 backup_mediafiles
 backup_tar_name=$backup_folder_name".tar.gz"
-sudo chmod 744 ./$backup_folder_name
-sudo chmod -R 744 ./$backup_folder_name/*
+sudo chmod 777 ./$backup_folder_name
+sudo chmod -R 777 ./$backup_folder_name/*
+sudo chown $USER:$USER ./$backup_folder_name
+sudo chown -R $USER:$USER ./$backup_folder_name/*
 # GZIP=-9 tar -zcvpf $backup_tar_name $backup_folder_name
 
 s3path="s3://naxa-developers/backups/projects-backups/$project_name/$backup_tar_name"
@@ -147,7 +149,7 @@ echo "Creating TAR file on AWS..."
 sudo tar cpz $backup_folder_name | gzip | aws s3 cp - $s3path
 echo "TAR file creation complete!"
 echo "Cleaning up...."
-sudo rm -r $backup_folder_name
+# sudo rm -r $backup_folder_name
 
 log_text="$timestamp $project_name SUCCESS"
 echo $log_text >>$working_dir/backup_log.txt
