@@ -1,0 +1,22 @@
+{
+    "Rules": [
+        {
+            "ID": "Move to Glacier after seven days (objects in naxa-developers/Jenkins_backup/)",
+            "Prefix": "naxa-developers/Jenkins_backup/",
+            "Status": "Enabled",
+            "Transition": {
+                "Days": 7,
+                "StorageClass": "GLACIER"
+            }
+        },
+        {
+            "ID": "Move to Glacier after seven days (objects in naxa-developers/Project-backups/)",
+            "Prefix": "naxa-developers/Project-backups/",
+            "Status": "Enabled",
+            "Transition": {
+                "Days": 7,
+                "StorageClass": "GLACIER"
+            }
+        }
+    ]
+}

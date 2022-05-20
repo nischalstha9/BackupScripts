@@ -52,33 +52,41 @@ backup_dir=$working_dir/$backup_folder_name
 mkdir -p $backup_dir
 
 function backup_env() {
+  echo "Starting Environment Backup!"
   env_backup=$backup_dir/Environments
   mkdir -p $env_backup
 
   cd $project_path
   sudo find . -maxdepth 1 -type f -iname "*env*" -exec cp -rf '{}' "$env_backup/{}" ';'
   cd $working_dir
+  echo "Environment Backup Complete!"
 }
 
 function backup_dockerfiles() {
+  echo "Starting Dockerfiles Backup!"
   mkdir -p $backup_dir/DockerSettings
   cur_dir=$(pwd)
   cd $project_path
   sudo find . -maxdepth 1 -type f -iname "*docker*" -exec cp -rf '{}' "$(echo $backup_dir)/DockerSettings/{}" ';'
   cd $cur_dir
+  echo "Dockerfiles Backup Complete!"
 }
 
 function backup_mediafiles() {
+  echo "Starting Mediafiles Backup!"
   mkdir -p $backup_dir/MediaFiles
   cur_dir=$(pwd)
   cd $project_path
   sudo find . -maxdepth 1 -type d -iname "media" -exec cp -rf '{}' "$(echo $backup_dir)/MediaFiles/{}" ';'
   cd $cur_dir
+  echo "Mediafiles Backup Complete!"
 }
 
 function set_env() {
   {
+    echo "Setting up Environment!"
     export $(grep -v '^#' $project_path/$env_file_name | xargs)
+    echo "Environment set!"
   } || {
     echo "Environment Setup Failed!"
     exit 1
@@ -86,6 +94,7 @@ function set_env() {
 }
 
 function do_db_backup() {
+  echo "Starting Database Backup!"
   mkdir -p $backup_dir/Database
   dbname=$project_name"-"$timestamp".tar"
   db_backup_file_name=$dbname
@@ -99,10 +108,12 @@ function do_db_backup() {
       echo "NO Database Container name defined. Define it in -d parameter."
       echo "Finding Database Container ......."
       db_container_name=$(docker-compose ps | grep 5432 | awk {'print $1'})
+      echo "Database container resolved: $db_container_name"
     fi
 
     # db_container_name=psql_naxa
 
+    echo "Backing up Database..."
     docker exec -t $db_container_name mkdir -p /var/lib/postgresql/data/db-backups
     docker exec -t $db_container_name pg_dump --format=t --blobs --no-privileges --no-owner --dbname $DATABASE_NAME --user $DATABASE_USER --file /var/lib/postgresql/data/db-backups/$dbname
 
@@ -112,8 +123,9 @@ function do_db_backup() {
     sudo cp $project_path/$postgresdatafoldername/db-backups/$dbname $backup_dir/Database/
     sudo rm -r $project_path/$postgresdatafoldername/db-backups
     cd $working_dir
+    echo "Database Backup Complete!"
   } || {
-    echo "DB BACKUP FAILED!!"
+    echo "Database backup failed!!"
     # pg_dump --format=t --blobs --verbose --no-privileges --no-owner --dbname $POSTGRES_DB --user $POSTGRES_USER --file /var/lib/postgresql/data/db-backups/$dbname
     # sudo cp ./postgres_data/db-backups/$dbname $backup_dir/Database/
   }
@@ -129,9 +141,12 @@ sudo chmod 744 ./$backup_folder_name
 sudo chmod -R 744 ./$backup_folder_name/*
 # GZIP=-9 tar -zcvpf $backup_tar_name $backup_folder_name
 
-s3path="s3://naxa-developers/Project-backups/$project_name/$backup_tar_name"
+s3path="s3://naxa-developers/backups/projects-backups/$project_name/$backup_tar_name"
 
+echo "Creating TAR file on AWS..."
 sudo tar cpz $backup_folder_name | gzip | aws s3 cp - $s3path
+echo "TAR file creation complete!"
+echo "Cleaning up...."
 sudo rm -r $backup_folder_name
 
 log_text="$timestamp $project_name SUCCESS"
