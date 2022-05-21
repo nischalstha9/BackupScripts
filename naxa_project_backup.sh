@@ -51,35 +51,63 @@ backup_folder_name=$project_name"-BACKUP-"$timestamp
 backup_dir=$working_dir/$backup_folder_name
 mkdir -p $backup_dir
 
-function backup_env() {
-  echo "Starting Environment Backup!"
-  env_backup=$backup_dir/Environments
-  mkdir -p $env_backup
+backup_log_file=$working_dir/projects.backup.log
 
-  cd $project_path
-  sudo find . -maxdepth 1 -type f -iname "*env*" -exec cp -rf '{}' "$env_backup/{}" ';'
-  cd $working_dir
-  echo "Environment Backup Complete!"
+if [ ! -f "$backup_log_file" ]; then
+  touch $backup_log_file
+fi
+
+function backup_env() {
+  {
+    echo "Starting Environment Backup!"
+    env_backup=$backup_dir/Environments
+    mkdir -p $env_backup
+
+    cd $project_path
+    sudo find . -maxdepth 1 -type f -iname "*env*" -exec cp -rf '{}' "$env_backup/{}" ';'
+    cd $working_dir
+    echo "Environment Backup Complete!"
+
+    log_text="$timestamp $project_name env_backup SUCCESS"
+  } || {
+    echo "Environment Backup Failed!"
+    log_text="$timestamp $project_name env_backup FAILURE"
+  }
+  echo $log_text >>$backup_log_file
 }
 
 function backup_dockerfiles() {
-  echo "Starting Dockerfiles Backup!"
-  mkdir -p $backup_dir/DockerSettings
-  cur_dir=$(pwd)
-  cd $project_path
-  sudo find . -maxdepth 1 -type f -iname "*docker*" -exec cp -rf '{}' "$(echo $backup_dir)/DockerSettings/{}" ';'
-  cd $cur_dir
-  echo "Dockerfiles Backup Complete!"
+  {
+    echo "Starting Dockerfiles Backup!"
+    mkdir -p $backup_dir/DockerSettings
+    cur_dir=$(pwd)
+    cd $project_path
+    sudo find . -maxdepth 1 -type f -iname "*docker*" -exec cp -rf '{}' "$(echo $backup_dir)/DockerSettings/{}" ';'
+    cd $cur_dir
+    echo "Dockerfiles Backup Complete!"
+    log_text="$timestamp $project_name dockerfiles_backup SUCCESS"
+  } || {
+    echo "Dockerfiles Backup Failed!"
+    log_text="$timestamp $project_name dockerfiles_backup FAILURE"
+  }
+  echo $log_text >>$backup_log_file
 }
 
 function backup_mediafiles() {
-  echo "Starting Mediafiles Backup!"
-  mkdir -p $backup_dir/MediaFiles
-  cur_dir=$(pwd)
-  cd $project_path
-  sudo find . -maxdepth 1 -type d -iname "media" -exec cp -rf '{}' "$(echo $backup_dir)/MediaFiles/{}" ';'
-  cd $cur_dir
-  echo "Mediafiles Backup Complete!"
+  {
+    echo "Starting Mediafiles Backup!"
+    mkdir -p $backup_dir/MediaFiles
+    cur_dir=$(pwd)
+    cd $project_path
+    sudo find . -maxdepth 1 -type d -iname "media" -exec cp -rf '{}' "$(echo $backup_dir)/MediaFiles/{}" ';'
+    cd $cur_dir
+    echo "Mediafiles Backup Complete!"
+    log_text="$timestamp $project_name mediafiles_backup SUCCESS"
+  } || {
+    log_text="$timestamp $project_name mediafiles_backup FAILURE"
+    echo "Mediafiles Backup Failed!"
+  }
+  echo $log_text >>$backup_log_file
 }
 
 function set_env() {
@@ -87,10 +115,14 @@ function set_env() {
     echo "Setting up Environment!"
     export $(grep -v '^#' $project_path/$env_file_name | xargs)
     echo "Environment set!"
+    log_text="$timestamp $project_name env_setup SUCCESS"
   } || {
+    log_text="$timestamp $project_name env_setup FAILURE"
     echo "Environment Setup Failed!"
     exit 1
+
   }
+  echo $log_text >>$backup_log_file
 }
 
 function do_db_backup() {
@@ -98,9 +130,10 @@ function do_db_backup() {
   mkdir -p $backup_dir/Database
   dbname=$project_name"-"$timestamp".tar"
   db_backup_file_name=$dbname
-  DATABASE_NAME=$DATABASE_NAME$POSTGRES_DB
-  DATABASE_USER=$DATABASE_USER$POSTGRES_USER
+  DATABASE_NAME=$DATABASE_NAME$POSTGRES_DB$SQL_DATABASE
+  DATABASE_USER=$DATABASE_USER$POSTGRES_USER$SQL_USER
   {
+    set -e
     cd $project_path
     # db_container_name=$(echo $(docker inspect -f '{{.Name}}' $(docker-compose ps -q db) | cut -c2-))
 
@@ -124,11 +157,15 @@ function do_db_backup() {
     sudo rm -r $project_path/$postgresdatafoldername/db-backups
     cd $working_dir
     echo "Database Backup Complete!"
+    log_text="$timestamp $project_name database_backup SUCCESS"
   } || {
     echo "Database backup failed!!"
+    log_text="$timestamp $project_name database_backup FAILURE"
     # pg_dump --format=t --blobs --verbose --no-privileges --no-owner --dbname $POSTGRES_DB --user $POSTGRES_USER --file /var/lib/postgresql/data/db-backups/$dbname
     # sudo cp ./postgres_data/db-backups/$dbname $backup_dir/Database/
   }
+  echo $log_text >>$backup_log_file
+
 }
 
 set_env
@@ -149,10 +186,7 @@ echo "Creating TAR file on AWS..."
 sudo tar cpz $backup_folder_name | gzip | aws s3 cp - $s3path
 echo "TAR file creation complete!"
 echo "Cleaning up...."
-# sudo rm -r $backup_folder_name
-
-log_text="$timestamp $project_name SUCCESS"
-echo $log_text >>$working_dir/backup_log.txt
+sudo rm -r $backup_folder_name
 
 echo "========================================="
 echo "==                                     =="
